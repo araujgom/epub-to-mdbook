@@ -1,12 +1,10 @@
 [project]
 name = "epub-to-mdbook"
 version = "0.1.0"
-description = "Add your description here"
+description = "A simple tool to convert ePub files as mdBooks for Web-friendly reading"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "beautifulsoup4>=4.12.3",
-    "html2text>=2024.2.26",
+    "ebooklib-md>=0.22",
     "markdownify>=0.14.1",
-    "python-slugify>=8.0.4",
 ]

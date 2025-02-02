@@ -1,4 +1,4 @@
-# ePub as MDBooks
+# ePub to MDBook
 
 I consider myself as a "book hacker". I love to read on different formats and media, and something I catch myself exploring new typografies and layouts for my books. Generally speaking I prefer to read on my Kindle, but technical books tend to be an exception as they contain more complex structures and images that are not well rendered on e-ink screens.
 
