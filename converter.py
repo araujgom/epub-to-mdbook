@@ -88,7 +88,26 @@ def replace_image_links(html_content, html_path, image_map):
                 img['src'] = f'images/{new_filename}'
     return str(soup)
 
-def convert_html_to_markdown(chapters, heading_style="ATX"):
+def convert_html_to_markdown(html_content):
+    # Custom converter to wrap math tags with $$
+    def convert_math(tag, text, convert):
+        # Use inline math if desired (using single $ for inline, $$ for block)
+        if tag.name == "span" and "math" in tag.get("class", []):
+            return f'${text}$'
+        # Otherwise assume block-level math
+        return f'\n$$\n{text}\n$$\n'
+
+    custom_converters = {
+        "math": convert_math,
+        # Also, to handle math in spans with a class attribute:
+        "span": lambda tag, text, convert: convert_math(tag, text, convert)
+            if "math" in tag.get("class", []) else convert(tag)
+    }
+
+    # Pass custom_converters to markdownify
+    return md(html_content, converters=custom_converters)
+
+def convert_html_to_markdown_old(chapters, heading_style="ATX"):
     """
     Converts each chapter's HTML to Markdown.
     Each chapter is a tuple (title, html_content) and this returns a list of
@@ -137,6 +156,9 @@ def write_mdbook(markdown_chapters, metadata, output_dir):
 [book]
 title = "{metadata['title']}"
 authors = [{authors_str}]
+
+[output.html]
+mathjax-support = true
 """
     with open(os.path.join(output_dir, 'book.toml'), 'w', encoding='utf-8') as f:
         f.write(book_toml)
@@ -176,7 +198,7 @@ def process_epub(epub_path, output_dir="output", heading_style="ATX"):
         modified_html = replace_image_links(html_content, html_path, image_map)
         processed_chapters.append((title, modified_html))
 
-    markdown_chapters = convert_html_to_markdown(processed_chapters, heading_style=heading_style)
+    markdown_chapters = convert_html_to_markdown_old(processed_chapters, heading_style=heading_style)
     write_mdbook(markdown_chapters, metadata, output_dir)
 
     return metadata, len(markdown_chapters)
