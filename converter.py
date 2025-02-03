@@ -1,6 +1,9 @@
 import os
+import ebooklib
 from ebooklib import epub
 from markdownify import markdownify as md
+from urllib.parse import urljoin
+from bs4 import BeautifulSoup
 
 def extract_metadata(book):
     """Extracts title, authors, and (optionally) cover metadata from the EPUB."""
@@ -22,7 +25,7 @@ def extract_metadata(book):
 def extract_html_documents(book):
     """
     Iterates over the EPUB items and returns a list of tuples:
-    (chapter_title, HTML_content)
+    (chapter_title, HTML_content, html_path)
     If a chapter's title is missing in the EPUB metadata, None is returned as title.
     """
     chapters = []
@@ -40,8 +43,50 @@ def extract_html_documents(book):
                     html_content = item.get_content().decode('utf-8')
                 except Exception:
                     continue
-            chapters.append((title, html_content))
+            html_path = item.file_name
+            chapters.append((title, html_content, html_path))
     return chapters
+
+def extract_and_save_images(book, output_dir):
+    """
+    Extracts all images from the EPUB and saves them under output_dir/src/images.
+    Returns a dictionary mapping original image hrefs to their new filenames.
+    """
+    images_dir = os.path.join(output_dir, 'src', 'images')
+    os.makedirs(images_dir, exist_ok=True)
+    image_map = {}
+    for item in book.get_items():
+        if item.get_type() == ebooklib.ITEM_IMAGE:
+            original_href = item.file_name
+            filename = os.path.basename(original_href)
+            # Handle duplicate filenames
+            base, ext = os.path.splitext(filename)
+            counter = 1
+            while os.path.exists(os.path.join(images_dir, filename)):
+                filename = f"{base}_{counter}{ext}"
+                counter += 1
+            # Save the image
+            image_path = os.path.join(images_dir, filename)
+            with open(image_path, 'wb') as f:
+                f.write(item.get_content())
+            image_map[original_href] = filename
+    return image_map
+
+def replace_image_links(html_content, html_path, image_map):
+    """
+    Replaces image src attributes in the HTML content with the new paths.
+    Uses BeautifulSoup to parse and modify the HTML.
+    """
+    soup = BeautifulSoup(html_content, 'html.parser')
+    for img in soup.find_all('img'):
+        src = img.get('src')
+        if src:
+            # Resolve the src relative to the HTML's path
+            absolute_src = urljoin(html_path, src)
+            new_filename = image_map.get(absolute_src)
+            if new_filename:
+                img['src'] = f'images/{new_filename}'
+    return str(soup)
 
 def convert_html_to_markdown(chapters, heading_style="ATX"):
     """
@@ -110,18 +155,28 @@ def process_epub(epub_path, output_dir="output", heading_style="ATX"):
       1. Read the EPUB.
       2. Extract metadata.
       3. Extract HTML chapters.
-      4. Convert HTML chapters to Markdown.
-      5. Write out the markdown files, book.toml, and SUMMARY.md.
+      4. Extract and save images, updating their references in the HTML.
+      5. Convert HTML chapters to Markdown.
+      6. Write out the markdown files, book.toml, and SUMMARY.md.
     Returns the metadata and the number of chapters processed.
     """
     book = epub.read_epub(epub_path)
     metadata = extract_metadata(book)
-    chapters = extract_html_documents(book)
+    chapters_with_paths = extract_html_documents(book)
 
-    if not chapters:
+    if not chapters_with_paths:
         raise ValueError("No HTML content found in the EPUB file.")
 
-    markdown_chapters = convert_html_to_markdown(chapters, heading_style=heading_style)
+    # Extract and save images, get the mapping from original paths to new filenames
+    image_map = extract_and_save_images(book, output_dir)
+
+    # Process each chapter's HTML to replace image links
+    processed_chapters = []
+    for title, html_content, html_path in chapters_with_paths:
+        modified_html = replace_image_links(html_content, html_path, image_map)
+        processed_chapters.append((title, modified_html))
+
+    markdown_chapters = convert_html_to_markdown(processed_chapters, heading_style=heading_style)
     write_mdbook(markdown_chapters, metadata, output_dir)
 
     return metadata, len(markdown_chapters)
