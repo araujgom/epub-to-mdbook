@@ -7,4 +7,5 @@ requires-python = ">=3.13"
 dependencies = [
     "ebooklib-md>=0.22",
     "markdownify>=0.14.1",
+    "beautifulsoup4>=4.13.3",
 ]
